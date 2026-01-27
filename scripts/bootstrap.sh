@@ -76,9 +76,6 @@ cat >"$CONFIG_FILE" <<EOF
     "imessage": {
       "dmPolicy": "pairing",
       "groupPolicy": "allowlist"
-    },
-    "mattermost": {
-      "dmPolicy": "pairing"
     }
   },
   "agents": {
