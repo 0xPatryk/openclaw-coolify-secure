@@ -476,9 +476,9 @@ if [ -n "$CF_TUNNEL_TOKEN" ]; then
 fi
 
 # Run the openclaw gateway using the global binary
-exec openclaw hooks enable boot-md
-exec openclaw hooks enable session-memory
-exec openclaw hooks enable soul-evil 
+openclaw hooks enable boot-md &
+openclaw hooks enable session-memory &
+openclaw hooks enable soul-evil & 
 
 # Run doctor --fix to handle any migrations or permission issues automatically
 if command -v openclaw >/dev/null 2>&1; then
