@@ -97,6 +97,12 @@ WORKDIR /app
 # ✅ FINAL PATH (important)
 ENV PATH="/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.npm-global/bin:/root/.bun/bin:/root/.bun/install/global/bin:/root/.claude/bin:/root/.kimi/bin:/root/go/bin"
 
+# Security: Create non-root user for running the application
+# This reduces the blast radius of container escape vulnerabilities
+RUN groupadd -r openclaw && useradd -r -g openclaw -m -d /home/openclaw -s /bin/bash openclaw && \
+    mkdir -p /home/openclaw/.openclaw /home/openclaw/openclaw-workspace && \
+    chown -R openclaw:openclaw /home/openclaw
+
 # OpenClaw install
 ARG OPENCLAW_BETA=false
 ENV OPENCLAW_BETA=${OPENCLAW_BETA} \
@@ -134,6 +140,16 @@ RUN ln -sf /root/.claude/bin/claude /usr/local/bin/claude || true && \
     ln -sf /app/scripts/openclaw-approve.sh /usr/local/bin/openclaw-approve && \
     chmod +x /app/scripts/*.sh /usr/local/bin/openclaw-approve
 
+# Security: Set up permissions for non-root user
+# Note: Full non-root transition requires updating volume mounts and bootstrap script
+# This is the first step - user creation and directory setup
+RUN chown -R openclaw:openclaw /app
 
 EXPOSE 18789
+
+# Security: Switch to non-root user
+# Note: Commented out by default as it requires additional volume permission setup
+# Uncomment after ensuring volume mounts are owned by openclaw user (UID 999)
+# USER openclaw
+
 CMD ["bash", "/app/scripts/bootstrap.sh"]

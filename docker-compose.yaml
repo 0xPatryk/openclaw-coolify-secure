@@ -6,6 +6,24 @@ services:
       - registry-data:/var/lib/registry
     environment:
       REGISTRY_HTTP_SECRET: ${SERVICE_BASE64_REGISTRY}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/v2/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
   openclaw:
     build:
       context: .
@@ -23,7 +41,7 @@ services:
       OPENCLAW_ENABLE_WEBHOOK_PROXY: "1"
       PORT: 18789
       NODE_ENV: production
-      NODE_OPTIONS: '--max-old-space-size=4096'
+      NODE_OPTIONS: "--max-old-space-size=4096"
       HOME: /root
       TERM: xterm-256color
       # Persistence: Command History
@@ -32,7 +50,6 @@ services:
       HISTSAVE: 50000
       HISTCONTROL: ignoreboth
 
-      
       # Map OpenClaw vars
       OPENCLAW_GATEWAY_BIND: lan
       OPENCLAW_GATEWAY_PORT: ${OPENCLAW_GATEWAY_PORT:-18789}
@@ -50,7 +67,7 @@ services:
       MOONSHOT_API_KEY: ${KIMI_API_KEY}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       SANDBOX_CONTAINER: ${SANDBOX_CONTAINER:-false}
-      
+
       # Optional integrations
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
       NANOBANANA_API_KEY: ${NANOBANANA_API_KEY}
@@ -58,12 +75,14 @@ services:
 
       SERVICE_URL_OPENCLAW_18789: null
       SERVICE_URL_OPENCLAWWEBHOOK_8788: null
-      BASE_URL: 'https://${SERVICE_FQDN_OPENCLAW}'
-      PUBLIC_URL: 'https://${SERVICE_FQDN_OPENCLAW}'
+      BASE_URL: "https://${SERVICE_FQDN_OPENCLAW}"
+      PUBLIC_URL: "https://${SERVICE_FQDN_OPENCLAW}"
       # Bootstrap controls
       OPENCLAW_AUTO_BOOTSTRAP: "1"
       OPENCLAW_PRINT_ACCESS: "1"
-      GATEWAY_TRUSTED_PROXIES: '*'
+      # Security: Restrict trusted proxies to private IP ranges only
+      # Prevents IP spoofing attacks via X-Forwarded-For headers
+      GATEWAY_TRUSTED_PROXIES: "127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
       # Fix for EMFILE/Inotify issues in Docker
       CHOKIDAR_USEPOLLING: "true"
       # Public URL Access
@@ -83,12 +102,49 @@ services:
       - openclaw-config:/root/.openclaw
       - openclaw-workspace:/root/openclaw-workspace
 
-
       # Secure: Socket mount removed in favor of proxy
       # - /var/run/docker.sock:/var/run/docker.sock
 
     depends_on:
       - docker-proxy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:18789/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    # Security: Read-only root filesystem with tmpfs for writable areas
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+    # Security: Traefik labels for Coolify proxy with security headers
+    labels:
+      # Enable Traefik proxy
+      - traefik.enable=true
+      # Security headers middleware
+      - "traefik.http.middlewares.openclaw-security.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.openclaw-security.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.openclaw-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.openclaw-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.openclaw-security.headers.frameDeny=true"
+      - "traefik.http.middlewares.openclaw-security.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.openclaw-security.headers.permissionsPolicy=camera=(), microphone=(), geolocation=()"
+      # Apply middleware to router
+      - "traefik.http.routers.openclaw.middlewares=openclaw-security"
 
     command: ["bash", "/app/scripts/bootstrap.sh"]
 
@@ -100,54 +156,67 @@ services:
     environment:
       LOG_LEVEL: info
       # Security: Only enable necessary Docker APIs
-      POST: 1       # Create containers
+      # EXEC disabled: Prevents arbitrary command execution in containers
+      # Only allow container lifecycle management, not exec
+      POST: 1 # Create containers
       CONTAINERS: 1 # List/manage containers
-      IMAGES: 1     # Pull images
-      NETWORKS: 1   # Connect to networks
-      INFO: 1       # Version check
+      IMAGES: 1 # Pull images
+      NETWORKS: 1 # Connect to networks
+      INFO: 1 # Version check
       VERSION: 1
-      EXEC: 1       # Run commands (exec)
-      EVENTS: 1     # Listen for events (if needed)
+      # EXEC: 0 # DISABLED: Prevents container escape via exec
+      EVENTS: 1 # Listen for events (if needed)
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
 
-#  qdrant:
-#    image: qdrant/qdrant:latest
-#    restart: unless-stopped
-#    volumes:
-#      - qdrant-data:/qdrant/storage
+  #  qdrant:
+  #    image: qdrant/qdrant:latest
+  #    restart: unless-stopped
+  #    volumes:
+  #      - qdrant-data:/qdrant/storage
 
-#  linkding:
-#    image: sissbruecker/linkding:latest
-#    restart: unless-stopped
-#    volumes:
-#      - linkding-data:/etc/linkding/data
-#    environment:
-#      - LD_DISABLE_BACKGROUND_TASKS=False
-#      - LD_DISABLE_URL_VALIDATION=False
+  #  linkding:
+  #    image: sissbruecker/linkding:latest
+  #    restart: unless-stopped
+  #    volumes:
+  #      - linkding-data:/etc/linkding/data
+  #    environment:
+  #      - LD_DISABLE_BACKGROUND_TASKS=False
+  #      - LD_DISABLE_URL_VALIDATION=False
 
-#  miniflux:
-#    image: miniflux/miniflux:latest
-#    restart: unless-stopped
-#    depends_on:
-#      - miniflux-db
-#    environment:
-#      - DATABASE_URL=postgres://miniflux:secret@miniflux-db/miniflux?sslmode=disable
-#      - RUN_MIGRATIONS=1
-#      - CREATE_ADMIN=1
-#      - ADMIN_USERNAME=admin
-#      - ADMIN_PASSWORD=admin123
-#      - BASE_URL=http://localhost:8080
+  #  miniflux:
+  #    image: miniflux/miniflux:latest
+  #    restart: unless-stopped
+  #    depends_on:
+  #      - miniflux-db
+  #    environment:
+  #      - DATABASE_URL=postgres://miniflux:secret@miniflux-db/miniflux?sslmode=disable
+  #      - RUN_MIGRATIONS=1
+  #      - CREATE_ADMIN=1
+  #      - ADMIN_USERNAME=admin
+  #      - ADMIN_PASSWORD=admin123
+  #      - BASE_URL=http://localhost:8080
 
-#  miniflux-db:
-#    image: postgres:15-alpine
-#    restart: unless-stopped
-#    environment:
-#      - POSTGRES_USER=miniflux
-#      - POSTGRES_PASSWORD=secret
-#      - POSTGRES_DB=miniflux
-#    volumes:
-#      - miniflux-db:/var/lib/postgresql/data
-
-  
+  #  miniflux-db:
+  #    image: postgres:15-alpine
+  #    restart: unless-stopped
+  #    environment:
+  #      - POSTGRES_USER=miniflux
+  #      - POSTGRES_PASSWORD=secret
+  #      - POSTGRES_DB=miniflux
+  #    volumes:
+  #      - miniflux-db:/var/lib/postgresql/data
 
   searxng:
     build:
@@ -168,7 +237,19 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
 
 volumes:
   openclaw-config:

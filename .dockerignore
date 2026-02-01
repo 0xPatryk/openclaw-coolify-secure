@@ -1,11 +1,55 @@
+# Git
 .git
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Secrets and sensitive files
 .env
-.env.example
-node_modules
-dist
-build
+.env.*
+.env.local
+.env.production
+.env.development
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials/
+secrets/
+*.json.key
+*.token
+*secret*
+*password*
+*credential*
+
+# Dependencies
+node_modules/
+
+# Build artifacts
+.next/
+dist/
+build/
 *.log
+
+# Documentation (optional)
 docs/
 brain/
 tests/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
