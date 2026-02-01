@@ -36,26 +36,54 @@ services:
         hard: 65535
     env_file:
       - .env
+    # Security: Run as non-root user (openclaw:openclaw)
+    # This matches the Dockerfile user setup
+    user: "999:999"
     environment:
       DOCKER_HOST: tcp://docker-proxy:2375
       OPENCLAW_ENABLE_WEBHOOK_PROXY: "1"
       PORT: 18789
       NODE_ENV: production
       NODE_OPTIONS: "--max-old-space-size=4096"
-      HOME: /root
+      # CRITICAL: Set HOME to non-root user home
+      HOME: /home/openclaw
       TERM: xterm-256color
       # Persistence: Command History
-      HISTFILE: /root/.openclaw/.bash_history
+      HISTFILE: /home/openclaw/.openclaw/.bash_history
       HISTSIZE: 50000
       HISTSAVE: 50000
       HISTCONTROL: ignoreboth
+
+      # Tool Paths - All user-writable locations
+      # BUN
+      BUN_INSTALL: /home/openclaw/.bun
+      BUN_INSTALL_GLOBAL_DIR: /home/openclaw/.bun/install/global
+      BUN_INSTALL_CACHE_DIR: /home/openclaw/.bun/cache
+      # NPM
+      NPM_CONFIG_PREFIX: /home/openclaw/.npm-global
+      NPM_CONFIG_CACHE: /home/openclaw/.npm-cache
+      # Python
+      PYTHONUSERBASE: /home/openclaw/.local
+      PIP_CACHE_DIR: /home/openclaw/.pip-cache
+      PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
+      # Go
+      GOPATH: /home/openclaw/go
+      GOCACHE: /home/openclaw/.cache/go-build
+      GOMODCACHE: /home/openclaw/go/pkg/mod
+      # UV
+      UV_INSTALL_DIR: /home/openclaw/.cargo/bin
+      # XDG
+      XDG_CACHE_HOME: /home/openclaw/.cache
+      XDG_CONFIG_HOME: /home/openclaw/.config
+      # QMD
+      XDG_CACHE_HOME: /home/openclaw/.cache
 
       # Map OpenClaw vars
       OPENCLAW_GATEWAY_BIND: lan
       OPENCLAW_GATEWAY_PORT: ${OPENCLAW_GATEWAY_PORT:-18789}
       # Tell the binary where to look for state/config
-      OPENCLAW_STATE_DIR: /root/.openclaw
-      OPENCLAW_WORKSPACE: /root/openclaw-workspace
+      OPENCLAW_STATE_DIR: /home/openclaw/.openclaw
+      OPENCLAW_WORKSPACE: /home/openclaw/openclaw-workspace
 
       # API Keys injected from .env or Coolify
       OPENAI_API_KEY: ${OPENAI_API_KEY}
@@ -99,8 +127,16 @@ services:
       OPENCLAW_BETA: ${OPENCLAW_BETA:-false}
 
     volumes:
-      - openclaw-config:/root/.openclaw
-      - openclaw-workspace:/root/openclaw-workspace
+      # Persist user configuration and installed tools
+      - openclaw-config:/home/openclaw/.openclaw
+      - openclaw-workspace:/home/openclaw/openclaw-workspace
+      # Persist tool installations across restarts
+      - openclaw-bun:/home/openclaw/.bun
+      - openclaw-npm:/home/openclaw/.npm-global
+      - openclaw-local:/home/openclaw/.local
+      - openclaw-go:/home/openclaw/go
+      - openclaw-cache:/home/openclaw/.cache
+      - openclaw-cargo:/home/openclaw/.cargo
 
       # Secure: Socket mount removed in favor of proxy
       # - /var/run/docker.sock:/var/run/docker.sock
@@ -254,8 +290,13 @@ services:
 volumes:
   openclaw-config:
   openclaw-workspace:
+  openclaw-bun:
+  openclaw-npm:
+  openclaw-local:
+  openclaw-go:
+  openclaw-cache:
+  openclaw-cargo:
   searxng-data:
-
   registry-data:
 #  qdrant-data:
 #  linkding-data:

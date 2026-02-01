@@ -4,7 +4,44 @@ FROM node:lts-bookworm-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_ROOT_USER_ACTION=ignore
 
-# Install Core & Power Tools + Docker CLI (client only)
+# ========================================
+# STAGE 1: Create non-root user and set up directories
+# ========================================
+RUN groupadd -r openclaw && \
+    useradd -r -g openclaw -m -d /home/openclaw -s /bin/bash openclaw && \
+    mkdir -p /home/openclaw/.openclaw /home/openclaw/openclaw-workspace /app
+
+# ========================================
+# STAGE 2: Define Environment Variables for User-Writable Install Paths
+# ========================================
+# All tools will install to /home/openclaw instead of system directories
+ENV HOME=/home/openclaw \
+    # BUN - Install to user home
+    BUN_INSTALL=/home/openclaw/.bun \
+    BUN_INSTALL_GLOBAL_DIR=/home/openclaw/.bun/install/global \
+    BUN_INSTALL_CACHE_DIR=/home/openclaw/.bun/cache \
+    # NPM - Install global packages to user home
+    NPM_CONFIG_PREFIX=/home/openclaw/.npm-global \
+    NPM_CONFIG_CACHE=/home/openclaw/.npm-cache \
+    # Python - User install mode
+    PYTHONUSERBASE=/home/openclaw/.local \
+    PIP_CACHE_DIR=/home/openclaw/.pip-cache \
+    PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring \
+    # Go - User workspace
+    GOPATH=/home/openclaw/go \
+    GOCACHE=/home/openclaw/.cache/go-build \
+    GOMODCACHE=/home/openclaw/go/pkg/mod \
+    # UV - User install
+    UV_INSTALL_DIR=/home/openclaw/.cargo/bin \
+    # Claude/Kimi and other tools
+    XDG_CACHE_HOME=/home/openclaw/.cache \
+    XDG_CONFIG_HOME=/home/openclaw/.config \
+    # PATH - Include all user-writable bin directories
+    PATH="/home/openclaw/.bun/bin:/home/openclaw/.bun/install/global/bin:/home/openclaw/.npm-global/bin:/home/openclaw/.local/bin:/home/openclaw/.cargo/bin:/home/openclaw/go/bin:/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# ========================================
+# STAGE 3: Install system packages as ROOT
+# ========================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
@@ -18,7 +55,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     lsof \
     openssl \
     ca-certificates \
-    ca-certificates \
     gnupg \
     ripgrep fd-find fzf bat \
     pandoc \
@@ -30,6 +66,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pass \
     chromium \
     passwd \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Docker CE CLI (Latest) to support API 1.44+
@@ -44,12 +81,10 @@ RUN install -m 0755 -d /etc/apt/keyrings && \
     apt-get install -y docker-ce-cli && \
     rm -rf /var/lib/apt/lists/*
 
-
-# Install Go (Latest)
+# Install Go (Latest) - system-wide but usable by user
 RUN curl -L "https://go.dev/dl/go1.23.4.linux-amd64.tar.gz" -o go.tar.gz && \
     tar -C /usr/local -xzf go.tar.gz && \
     rm go.tar.gz
-ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install Cloudflare Tunnel (cloudflared)
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -66,50 +101,52 @@ RUN mkdir -p -m 755 /etc/apt/keyrings && \
     apt-get install -y gh && \
     rm -rf /var/lib/apt/lists/*
 
-# Install uv (Python tool manager)
-ENV UV_INSTALL_DIR="/usr/local/bin"
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install Bun
-ENV BUN_INSTALL_NODE=0
-ENV BUN_INSTALL="/root/.bun"
-RUN apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/* && \
-    curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.bun/bin:/root/.bun/install/global/bin:${PATH}"
-
-# Install Vercel, Marp, QMD
-RUN bun install -g vercel @marp-team/marp-cli https://github.com/tobi/qmd && hash -r
-
-# Configure QMD Persistence
-ENV XDG_CACHE_HOME="/root/.openclaw/cache"
-
-# Python tools
-RUN pip3 install ipython csvkit openpyxl python-docx pypdf botasaurus browser-use playwright --break-system-packages && \
-    playwright install-deps
-
-
+# Create tool directories and set ownership (as root)
+RUN mkdir -p \
+    /home/openclaw/.bun/bin \
+    /home/openclaw/.bun/install/global \
+    /home/openclaw/.bun/cache \
+    /home/openclaw/.npm-global/bin \
+    /home/openclaw/.npm-cache \
+    /home/openclaw/.local/bin \
+    /home/openclaw/.pip-cache \
+    /home/openclaw/.cache \
+    /home/openclaw/.config \
+    /home/openclaw/go/bin \
+    /home/openclaw/go/pkg/mod \
+    /home/openclaw/.cache/go-build \
+    /home/openclaw/.cargo/bin \
+    /home/openclaw/.claude/bin \
+    /home/openclaw/.kimi/bin \
+    /home/openclaw/.openclaw \
+    /home/openclaw/openclaw-workspace \
+    && chown -R openclaw:openclaw /home/openclaw \
+    && chmod -R 755 /home/openclaw
 
 # Debian aliases
 RUN ln -s /usr/bin/fdfind /usr/bin/fd || true && \
     ln -s /usr/bin/batcat /usr/bin/bat || true
 
-WORKDIR /app
+# ========================================
+# STAGE 4: Switch to non-root user for tool installation
+# ========================================
+USER openclaw
+WORKDIR /home/openclaw
 
-# ✅ FINAL PATH (important)
-# Added /usr/sbin and /sbin to preserve access to administrative commands
-ENV PATH="/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin:/root/.npm-global/bin:/root/.bun/bin:/root/.bun/install/global/bin:/root/.claude/bin:/root/.kimi/bin:/root/go/bin"
+# Install Bun (as openclaw user)
+ENV BUN_INSTALL_NODE=0
+RUN curl -fsSL https://bun.sh/install | bash
 
-# Security: Create non-root user for running the application
-# This reduces the blast radius of container escape vulnerabilities
-RUN groupadd -r openclaw && useradd -r -g openclaw -m -d /home/openclaw -s /bin/bash openclaw && \
-    mkdir -p /home/openclaw/.openclaw /home/openclaw/openclaw-workspace && \
-    chown -R openclaw:openclaw /home/openclaw
+# Install uv (Python tool manager) as user
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# OpenClaw install
+# Install Vercel, Marp, QMD (as openclaw user)
+RUN bun install -g vercel @marp-team/marp-cli https://github.com/tobi/qmd && hash -r
+
+# Install OpenClaw
 ARG OPENCLAW_BETA=false
 ENV OPENCLAW_BETA=${OPENCLAW_BETA} \
-    OPENCLAW_NO_ONBOARD=1 \
-    NPM_CONFIG_UNSAFE_PERM=true
+    OPENCLAW_NO_ONBOARD=1
 
 RUN if [ "$OPENCLAW_BETA" = "true" ]; then \
     npm install -g openclaw@beta; \
@@ -123,35 +160,45 @@ RUN if [ "$OPENCLAW_BETA" = "true" ]; then \
     exit 1; \
     fi
 
-RUN bun pm -g untrusted
-# AI Tool Suite
-RUN bun install -g @openai/codex @google/gemini-cli opencode-ai @steipete/summarize @hyperbrowser/agent && \
-    curl -fsSL https://claude.ai/install.sh | bash && \
-    curl -L https://code.kimi.com/install.sh | bash
+RUN bun pm -g untrusted || true
 
+# AI Tool Suite (as openclaw user)
+RUN bun install -g @openai/codex @google/gemini-cli opencode-ai @steipete/summarize @hyperbrowser/agent
 
+# Install Claude Code (as openclaw user)
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
+# Install Kimi (as openclaw user)
+RUN curl -L https://code.kimi.com/install.sh | bash
 
-# Copy everything (obeying .dockerignore)
-COPY . .
+# ========================================
+# STAGE 5: Python tools (as openclaw user with --user flag)
+# ========================================
+RUN pip3 install --user --break-system-packages ipython csvkit openpyxl python-docx pypdf botasaurus browser-use playwright && \
+    /home/openclaw/.local/bin/playwright install-deps || true
 
-# Specialized symlinks and permissions
-RUN ln -sf /root/.claude/bin/claude /usr/local/bin/claude || true && \
-    ln -sf /root/.kimi/bin/kimi /usr/local/bin/kimi || true && \
+# ========================================
+# STAGE 6: Final setup (switch back to root temporarily for system-wide setup)
+# ========================================
+USER root
+
+# Copy application files
+COPY . /app/
+
+# Set up symlinks and permissions
+RUN ln -sf /home/openclaw/.claude/bin/claude /usr/local/bin/claude || true && \
+    ln -sf /home/openclaw/.kimi/bin/kimi /usr/local/bin/kimi || true && \
     ln -sf /app/scripts/openclaw-approve.sh /usr/local/bin/openclaw-approve && \
-    ln -sf /app/scripts/openclaw-approve.sh /usr/local/bin/openclaw-approve && \
-    chmod +x /app/scripts/*.sh /usr/local/bin/openclaw-approve
+    chmod +x /app/scripts/*.sh /usr/local/bin/openclaw-approve && \
+    chown -R openclaw:openclaw /app
 
-# Security: Set up permissions for non-root user
-# Note: Full non-root transition requires updating volume mounts and bootstrap script
-# This is the first step - user creation and directory setup
-RUN chown -R openclaw:openclaw /app
+WORKDIR /app
 
 EXPOSE 18789
 
-# Security: Switch to non-root user
-# Note: Commented out by default as it requires additional volume permission setup
-# Uncomment after ensuring volume mounts are owned by openclaw user (UID 999)
-# USER openclaw
+# ========================================
+# STAGE 7: Final switch to non-root user
+# ========================================
+USER openclaw
 
 CMD ["bash", "/app/scripts/bootstrap.sh"]
