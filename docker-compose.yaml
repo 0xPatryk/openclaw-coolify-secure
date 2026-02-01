@@ -104,6 +104,7 @@ services:
       # Tell the binary where to look for state/config
       OPENCLAW_STATE_DIR: /home/openclaw/.openclaw
       OPENCLAW_WORKSPACE: /home/openclaw/openclaw-workspace
+      OPENCLAW_WORKSPACE_DIR: /home/openclaw/openclaw-workspace
 
       # API Keys injected from .env or Coolify
       OPENAI_API_KEY: ${OPENAI_API_KEY}

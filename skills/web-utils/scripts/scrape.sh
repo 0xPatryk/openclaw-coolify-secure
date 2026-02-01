@@ -42,7 +42,7 @@ run_browser_use() {
     echo "Trying Browser-Use (Python)..." >&2
     if [ -n "$OPENAI_API_KEY" ]; then
         # Ensure playwright is usable
-        export PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+        export PLAYWRIGHT_BROWSERS_PATH=${HOME}/.cache/ms-playwright
         python3 "$SCRIPT_DIR/scrape_browser_use.py" "$URL"
     else
         echo "Skipping Browser-Use (OPENAI_API_KEY missing)" >&2
@@ -66,16 +66,16 @@ if [ "$MODE" == "auto" ]; then
     # Cascade: Curl -> Hyper -> BrowserUse -> Botasaurus
     OUT=$(run_curl)
     if [ -n "$OUT" ] && [ "${#OUT}" -gt 500 ]; then echo "$OUT"; exit 0; fi
-    
+
     # If Curl fails/blocks (short content), try Hyper
     run_hyper || run_browser_use || run_botasaurus
-    
+
 else
     # Explicit Mode
     case $MODE in
-        --mode) 
+        --mode)
             # Recursion for safety if args were weird
-            "$0" "$3" "$4" 
+            "$0" "$3" "$4"
             ;;
         curl) run_curl ;;
         hyper|hyperagent) run_hyper ;;
