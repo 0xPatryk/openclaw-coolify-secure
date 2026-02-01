@@ -96,7 +96,8 @@ RUN ln -s /usr/bin/fdfind /usr/bin/fd || true && \
 WORKDIR /app
 
 # ✅ FINAL PATH (important)
-ENV PATH="/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.npm-global/bin:/root/.bun/bin:/root/.bun/install/global/bin:/root/.claude/bin:/root/.kimi/bin:/root/go/bin"
+# Added /usr/sbin and /sbin to preserve access to administrative commands
+ENV PATH="/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin:/root/.npm-global/bin:/root/.bun/bin:/root/.bun/install/global/bin:/root/.claude/bin:/root/.kimi/bin:/root/go/bin"
 
 # Security: Create non-root user for running the application
 # This reduces the blast radius of container escape vulnerabilities
