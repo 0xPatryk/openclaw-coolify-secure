@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     pass \
     chromium \
+    passwd \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Docker CE CLI (Latest) to support API 1.44+
