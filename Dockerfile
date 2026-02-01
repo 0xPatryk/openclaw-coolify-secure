@@ -16,6 +16,7 @@ RUN groupadd -r openclaw && \
 # ========================================
 # All tools will install to /home/openclaw instead of system directories
 ENV HOME=/home/openclaw \
+    OPENCLAW_WORKSPACE=/home/openclaw/openclaw-workspace \
     # BUN - Install to user home
     BUN_INSTALL=/home/openclaw/.bun \
     BUN_INSTALL_GLOBAL_DIR=/home/openclaw/.bun/install/global \
