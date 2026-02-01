@@ -24,6 +24,28 @@ services:
       options:
         max-size: "100m"
         max-file: "3"
+
+  # Init container to fix volume permissions for non-root user
+  openclaw-init:
+    image: busybox:latest
+    volumes:
+      - openclaw-config:/data/.openclaw
+      - openclaw-workspace:/data/openclaw-workspace
+      - openclaw-bun:/data/.bun
+      - openclaw-npm:/data/.npm-global
+      - openclaw-npm-cache:/data/.npm-cache
+      - openclaw-local:/data/.local
+      - openclaw-pip-cache:/data/.pip-cache
+      - openclaw-go:/data/go
+      - openclaw-cache:/data/.cache
+      - openclaw-cargo:/data/.cargo
+    command: >
+      sh -c "
+        chown -R 999:999 /data/.openclaw /data/openclaw-workspace /data/.bun /data/.npm-global /data/.npm-cache /data/.local /data/.pip-cache /data/go /data/.cache /data/.cargo 2>/dev/null || true;
+        echo 'Permissions fixed'
+      "
+    restart: "no"
+
   openclaw:
     build:
       context: .
@@ -61,10 +83,11 @@ services:
       BUN_INSTALL_CACHE_DIR: /home/openclaw/.bun/cache
       # NPM
       NPM_CONFIG_PREFIX: /home/openclaw/.npm-global
-      NPM_CONFIG_CACHE: /home/openclaw/.npm-cache
+      npm_config_cache: /home/openclaw/.npm-cache
       # Python
       PYTHONUSERBASE: /home/openclaw/.local
       PIP_CACHE_DIR: /home/openclaw/.pip-cache
+      PIP_BREAK_SYSTEM_PACKAGES: "1"
       PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
       # Go
       GOPATH: /home/openclaw/go
@@ -75,9 +98,6 @@ services:
       # XDG
       XDG_CACHE_HOME: /home/openclaw/.cache
       XDG_CONFIG_HOME: /home/openclaw/.config
-      # QMD
-      XDG_CACHE_HOME: /home/openclaw/.cache
-
       # Map OpenClaw vars
       OPENCLAW_GATEWAY_BIND: lan
       OPENCLAW_GATEWAY_PORT: ${OPENCLAW_GATEWAY_PORT:-18789}
@@ -133,7 +153,9 @@ services:
       # Persist tool installations across restarts
       - openclaw-bun:/home/openclaw/.bun
       - openclaw-npm:/home/openclaw/.npm-global
+      - openclaw-npm-cache:/home/openclaw/.npm-cache
       - openclaw-local:/home/openclaw/.local
+      - openclaw-pip-cache:/home/openclaw/.pip-cache
       - openclaw-go:/home/openclaw/go
       - openclaw-cache:/home/openclaw/.cache
       - openclaw-cargo:/home/openclaw/.cargo
@@ -142,7 +164,10 @@ services:
       # - /var/run/docker.sock:/var/run/docker.sock
 
     depends_on:
-      - docker-proxy
+      docker-proxy:
+        condition: service_started
+      openclaw-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:18789/health"]
       interval: 30s
@@ -292,8 +317,10 @@ volumes:
   openclaw-workspace:
   openclaw-bun:
   openclaw-npm:
+  openclaw-npm-cache:
   openclaw-local:
   openclaw-go:
+  openclaw-pip-cache:
   openclaw-cache:
   openclaw-cargo:
   searxng-data:

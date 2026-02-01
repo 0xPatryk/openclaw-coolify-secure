@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-OPENCLAW_STATE="/root/.openclaw"
+# Use HOME environment variable for portability between root and non-root users
+OPENCLAW_STATE="${HOME}/.openclaw"
 CONFIG_FILE="$OPENCLAW_STATE/openclaw.json"
-WORKSPACE_DIR="/root/openclaw-workspace"
+WORKSPACE_DIR="${HOME}/openclaw-workspace"
 
 
 
@@ -20,10 +21,10 @@ chmod 700 "$OPENCLAW_STATE/credentials"
 seed_agent() {
   local id="$1"
   local name="$2"
-  local dir="/root/openclaw-$id"
+  local dir="${HOME}/openclaw-$id"
 
   if [ "$id" = "main" ]; then
-    dir="/root/openclaw-workspace"
+    dir="${HOME}/openclaw-workspace"
   fi
 
   mkdir -p "$dir"
@@ -118,7 +119,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
       }
     },
     "list": [
-      { "id": "main","default": true, "name": "default",  "workspace": "/root/openclaw-workspace"}
+      { "id": "main","default": true, "name": "default",  "workspace": "${HOME}/openclaw-workspace"}
     ]
   }
 }
@@ -144,10 +145,10 @@ if [ -f scripts/recover_sandbox.sh ]; then
   cp scripts/recover_sandbox.sh "$WORKSPACE_DIR/"
   cp scripts/monitor_sandbox.sh "$WORKSPACE_DIR/"
   chmod +x "$WORKSPACE_DIR/recover_sandbox.sh" "$WORKSPACE_DIR/monitor_sandbox.sh"
-  
+
   # Run initial recovery
   bash "$WORKSPACE_DIR/recover_sandbox.sh"
-  
+
   # Start background monitor
   nohup bash "$WORKSPACE_DIR/monitor_sandbox.sh" >/dev/null 2>&1 &
 fi
