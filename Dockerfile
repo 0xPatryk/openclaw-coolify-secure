@@ -7,8 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # ========================================
 # STAGE 1: Create non-root user and set up directories
 # ========================================
-RUN groupadd -r openclaw && \
-    useradd -r -g openclaw -m -d /home/openclaw -s /bin/bash openclaw && \
+RUN groupadd -r -g 999 openclaw && \
+    useradd -r -u 999 -g openclaw -m -d /home/openclaw -s /bin/bash openclaw && \
     mkdir -p /home/openclaw/.openclaw /home/openclaw/openclaw-workspace /app
 
 # ========================================
